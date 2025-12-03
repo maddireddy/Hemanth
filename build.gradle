@@ -1,0 +1,54 @@
+plugins {
+    id 'org.springframework.boot' version '2.7.12'
+    id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+    id 'java'
+}
+
+group = 'com.pnc'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '1.8'
+
+repositories {
+    mavenCentral()
+    // maven {
+    //     url 'https://packages.confluent.io/maven/'
+    // }
+}
+
+// Helper tasks to run the small Avro utilities in src/main/java/com/pnc/efg/util
+task runAvroSchemaTool(type: JavaExec) {
+    group = 'tooling'
+    description = 'Run AvroSchemaTool with args: write-schema|write-sample-avro|register-schema <registryUrl> <subject>'
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'com.pnc.efg.util.AvroSchemaTool'
+    // pass arguments via -PavroArgs="write-schema" or -PavroArgs="write-sample-avro"
+    if (project.hasProperty('avroArgs')) {
+        args project.property('avroArgs').toString().split('\\s+')
+    }
+}
+
+// Run the standalone Avro consumer dump utility
+task runConsumerDump(type: JavaExec) {
+    group = 'tooling'
+    description = 'Run AvroConsumerDump: args: <topic> [bootstrapServer] [maxMessages]'
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'com.pnc.efg.util.AvroConsumerDump'
+    if (project.hasProperty('consumerArgs')) {
+        args project.property('consumerArgs').toString().split('\\s+')
+    }
+}
+
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.kafka:spring-kafka'
+    implementation 'org.apache.avro:avro:1.10.2'
+
+    // Optional: Confluent Avro serializer (if you plan to use Schema Registry directly)
+    // implementation 'io.confluent:kafka-avro-serializer:7.4.1'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'org.mockito:mockito-core:3.+'
+}
+

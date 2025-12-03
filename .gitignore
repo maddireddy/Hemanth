@@ -1,0 +1,23 @@
+# Gradle / build
+/build
+**/build/
+.gradle
+/.gradle
+
+# IDE / editor
+/.idea
+*.iml
+/.vscode
+
+# Logs and runtime files
+*.log
+*.pid
+
+# Java
+*.class
+
+# Misc
+.DS_Store
+
+# gradle-dist helper
+.gradle-dist
