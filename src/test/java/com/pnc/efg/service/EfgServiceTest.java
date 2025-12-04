@@ -1,6 +1,7 @@
 package com.pnc.efg.service;
 
 import com.pnc.efg.avro.schema.platformList.EfgPlatformList;
+import com.pnc.efg.avro.schema.alerts.EfgAlert;
 import com.pnc.efg.avro.schema.platformList.ProductRule;
 import com.pnc.efg.dto.ItemDto;
 import com.pnc.efg.dto.PublishRequest;
@@ -19,12 +20,14 @@ import static org.mockito.Mockito.*;
 class EfgServiceTest {
 
     private KafkaTemplate<String, EfgPlatformList> kafkaTemplate;
+    private KafkaTemplate<String, EfgAlert> alertKafkaTemplate;
     private EfgService service;
 
     @BeforeEach
     void setup() {
         kafkaTemplate = Mockito.mock(KafkaTemplate.class);
-        service = new EfgService(kafkaTemplate, "efg-platform-list");
+        alertKafkaTemplate = Mockito.mock(KafkaTemplate.class);
+        service = new EfgService(kafkaTemplate, alertKafkaTemplate, "efg-platform-list", "efg-all-alerts");
     }
 
     @Test
