@@ -1,5 +1,6 @@
 package com.pnc.efg.service;
 
+import com.pnc.efg.avro.schema.alerts.EfgAlert;
 import com.pnc.efg.avro.schema.platformList.EfgPlatformList;
 import com.pnc.efg.avro.schema.platformList.ProductRule;
 import com.pnc.efg.dto.ItemDto;
@@ -21,13 +22,19 @@ import java.util.stream.Stream;
 public class EfgService {
     private static final Logger log = LoggerFactory.getLogger(EfgService.class);
 
-    private final KafkaTemplate<String, EfgPlatformList> kafkaTemplate;
-    private final String topic;
+    private final KafkaTemplate<String, EfgPlatformList> kafkaTemplatePlatform;
+    private final KafkaTemplate<String, EfgAlert> kafkaTemplateAlert;
+    private final String platformTopic;
+    private final String alertTopic;
 
-    public EfgService(KafkaTemplate<String, EfgPlatformList> kafkaTemplate,
-                      @Value("${app.kafka.topic}") String topic) {
-        this.kafkaTemplate = kafkaTemplate;
-        this.topic = topic;
+    public EfgService(KafkaTemplate<String, EfgPlatformList> kafkaTemplatePlatform,
+                      KafkaTemplate<String, EfgAlert> kafkaTemplateAlert,
+                      @Value("${app.kafka.platform-topic}") String platformTopic,
+                      @Value("${app.kafka.alert-topic}") String alertTopic) {
+        this.kafkaTemplatePlatform = kafkaTemplatePlatform;
+        this.kafkaTemplateAlert = kafkaTemplateAlert;
+        this.platformTopic = platformTopic;
+        this.alertTopic = alertTopic;
     }
 
     /**
@@ -66,18 +73,18 @@ public class EfgService {
         out.setPlatformList(platformList);
 
         // send to Kafka (no key) — handle failures gracefully so the REST API doesn't fail when Kafka is down
-        if (kafkaTemplate != null) {
+        if (kafkaTemplatePlatform != null) {
             try {
-                ListenableFuture<SendResult<String, EfgPlatformList>> future = kafkaTemplate.send(topic, out);
+                ListenableFuture<SendResult<String, EfgPlatformList>> future = kafkaTemplatePlatform.send(platformTopic, out);
                 future.addCallback(new ListenableFutureCallback<SendResult<String, EfgPlatformList>>() {
                     @Override
                     public void onSuccess(SendResult<String, EfgPlatformList> result) {
-                        log.info("Message sent to topic {}: {}", topic, out);
+                        log.info("Message sent to topic {}: {}", platformTopic, out);
                     }
 
                     @Override
                     public void onFailure(Throwable ex) {
-                        log.error("Failed to send message to topic {}: {}", topic, ex.getMessage());
+                        log.error("Failed to send message to topic {}: {}", platformTopic, ex.getMessage());
                     }
                 });
             } catch (Exception e) {
@@ -85,6 +92,43 @@ public class EfgService {
             }
         } else {
             log.warn("KafkaTemplate is null; skipping send");
+        }
+    }
+
+    /**
+     * Publish alert messages to the alerts topic. Each AlertDto becomes an EfgAlert instance.
+     */
+    public void publishAlerts(com.pnc.efg.dto.PublishAlertRequest request) {
+        if (request == null || request.getAlerts() == null) return;
+
+        for (com.pnc.efg.dto.AlertDto dto : request.getAlerts()) {
+            EfgAlert a = new EfgAlert();
+            a.setPublishDateTime(request.getPublishDateTime());
+            a.setSourceSystem(request.getSourceSystem());
+            a.setAlertId(dto.getAlertId());
+            a.setEventTime(dto.getEventTime());
+            a.setAlertType(dto.getAlertType());
+            a.setSeverity(dto.getSeverity());
+            a.setMessage(dto.getMessage());
+
+            if (kafkaTemplateAlert != null) {
+                try {
+                    ListenableFuture<SendResult<String, EfgAlert>> f = kafkaTemplateAlert.send(alertTopic, a);
+                    f.addCallback(new ListenableFutureCallback<SendResult<String, EfgAlert>>() {
+                        @Override
+                        public void onSuccess(SendResult<String, EfgAlert> result) {
+                            log.info("Alert sent to topic {}: {}", alertTopic, a);
+                        }
+
+                        @Override
+                        public void onFailure(Throwable ex) {
+                            log.error("Failed to send alert to topic {}: {}", alertTopic, ex.getMessage());
+                        }
+                    });
+                } catch (Exception e) {
+                    log.error("Exception while sending alert to Kafka: {}", e.getMessage());
+                }
+            }
         }
     }
 }

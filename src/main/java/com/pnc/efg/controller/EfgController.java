@@ -1,6 +1,7 @@
 package com.pnc.efg.controller;
 
 import com.pnc.efg.dto.PublishRequest;
+import com.pnc.efg.dto.PublishAlertRequest;
 import com.pnc.efg.service.EfgService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,5 +23,11 @@ public class EfgController {
     public ResponseEntity<String> publish(@RequestBody PublishRequest request) {
         service.publish(request);
         return ResponseEntity.ok("published");
+    }
+
+    @PostMapping("/publish-alerts")
+    public ResponseEntity<String> publishAlerts(@RequestBody PublishAlertRequest request) {
+        service.publishAlerts(request);
+        return ResponseEntity.ok("alerts-published");
     }
 }
