@@ -1,78 +1,290 @@
 Project Notes - efg-platform-list
 ================================
 
-This document captures step-by-step instructions for: required software installs, classpath / JAVA_HOME / environment configuration, building the project, running the application (producer + consumer), debugging, and end-to-end testing. Tailored for macOS (zsh) and the current project layout.
+Purpose
+-------
+These notes describe how to set up the local environment on macOS and Windows, build and run the project (producer + consumer), test the endpoints, and verify messages on Kafka topics. They also document quick troubleshooting and recommended next steps.
 
-1) Prerequisites (software to install)
--------------------------------------
-- Java 8 (JDK 1.8) — required for building this project (sourceCompatibility = 1.8).
-  - Install using Homebrew (Temurin/CORRETTO) or your JDK manager:
+Overview of the project
+-----------------------
+- Spring Boot (2.7.x) application built with Gradle. Target Java 1.8 (sourceCompatibility=1.8).
+- Uses Avro reflection serializers/deserializers (no codegen plugin required).
+- Topics used:
+  - Platform list topic: `efg-platform-list`
+  - Alerts topic: `efg-all-alerts`
 
-    ```bash
-    brew tap homebrew/cask-versions
-    brew install --cask temurin8    # or corretto8, adoptopenjdk8, etc.
-    ```
+1) Prerequisites
+-----------------
+Install these tools before building or running locally.
 
-- Kafka & Zookeeper
-  - Install and run via Homebrew (quick for local dev):
+macOS (recommended)
+- Homebrew (https://brew.sh)
+- Java 8 (Temurin / Corretto / AdoptOpenJDK)
+  - Example (Homebrew Temurin 8):
 
-    ```bash
-    brew install kafka        # if not installed
-    brew services start zookeeper
-    brew services start kafka
-    ```
+  ```bash
+  brew tap homebrew/cask-versions
+  brew install --cask temurin8
+  ```
 
-  - Alternatively run Kafka + Schema Registry via docker-compose if you prefer containers.
+- Kafka (either local brew service or docker-compose). Quick options below.
+- kcat (formerly kafkacat):
 
-- (Optional) Confluent Schema Registry — if you plan to use Confluent Avro serializers
-  - Run via Docker Compose or install Confluent Platform locally.
-
-- kcat (formerly kafkacat) — nice CLI consumer/producer
   ```bash
   brew install kcat
   ```
 
-- jq — helpful to pretty-print JSON in shell
-  ```bash
-  brew install jq
-  ```
+Windows
+- Install a JDK 8 distribution (Temurin/Adoptium, Corretto). Use the installer and set JAVA_HOME.
+- Either install Kafka natively, or use Docker Desktop (recommended) and run the docker-compose stack.
+- Install kcat via scoop/chocolatey or use Dockerized kcat.
 
-2) Environment configuration (JAVA_HOME and PATH)
--------------------------------------------------
-- The build and some Gradle/Groovy compiled script classes expect to run under Java 8. Confirm current java:
+2) Kafka quickstart (two easy ways)
+----------------------------------
+A) Docker Compose (recommended for isolation)
 
-  ```bash
-  java -version
-  echo $JAVA_HOME
-  /usr/libexec/java_home -V
-  ```
+Create a docker-compose.yml (or use the repository's example if present). A minimal quick stack:
 
-- To set Java 8 for the current shell session:
+```yaml
+version: '3.8'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+  kafka:
+    image: confluentinc/cp-kafka:7.3.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - '9092:9092'
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.3.0
+    depends_on:
+      - zookeeper
+      - kafka
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: 'zookeeper:2181'
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    ports:
+      - '8081:8081'
+```
 
-  ```bash
-  export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
-  export PATH="$JAVA_HOME/bin:$PATH"
-  java -version    # should report 1.8.x
-  ```
+Start it:
 
-- To make this persistent add the export lines to `~/.zshrc`.
+```bash
+docker compose up -d
+```
 
-3) Build the project (Gradle helper)
------------------------------------
-- This repository includes a helper script `gradle7.sh` that downloads/uses Gradle 7.6 to avoid system Gradle issues.
+Verify Kafka broker:
 
-  ```bash
-  chmod +x ./gradle7.sh
-  ./gradle7.sh clean bootJar --no-daemon
-  ```
+```bash
+kcat -b localhost:9092 -L
+``` 
 
-- Output: `build/libs/efg-platform-list-0.0.1-SNAPSHOT.jar` (or similar).
+B) Homebrew (macOS) — quick native services
 
-4) Running the application
+```bash
+brew install kafka
+# start zookeeper and kafka
+brew services start zookeeper
+brew services start kafka
+```
+
+3) Environment configuration
+----------------------------
+macOS (zsh):
+
+```bash
+# point to Java 8 for this shell session
+export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
+export PATH="$JAVA_HOME/bin:$PATH"
+java -version
+```
+
+Windows (Command Prompt):
+
+```bat
+REM set JAVA_HOME for current session (PowerShell / CMD examples vary)
+setx JAVA_HOME "C:\\Program Files\\Eclipse Adoptium\\jdk-8u..."
+set PATH=%JAVA_HOME%\\bin;%PATH%
+java -version
+```
+
+4) Build the project
+--------------------
+This repo includes a Gradle wrapper and helper. Prefer the wrapper for reproducible builds.
+
+From the project root:
+
+macOS / Linux / Windows (Git Bash / PowerShell):
+
+```bash
+./gradlew clean build --no-daemon
+```
+
+If ./gradlew is not executable on macOS, make it so:
+
+```bash
+chmod +x gradlew
+```
+
+Artifacts: `build/libs/` will contain the jar (e.g., `efg-platform-list-0.0.1-SNAPSHOT.jar`).
+
+5) Running the application
 --------------------------
-There are several convenient ways to run the project depending on what you want to test.
+You can run the Spring Boot app in two ways: via the Gradle bootRun task or with the built jar.
 
-A) Full app (web server + consumer) — producer and consumer in same process
+- Using Gradle (dev):
 
-  ```bash
-  # ensure JAVA_HOME points to Java 8 (if needed)
+```bash
+./gradlew bootRun --no-daemon
+```
+
+- Using the jar (production-like):
+
+```bash
+java -jar build/libs/*-SNAPSHOT.jar
+```
+
+Configuration
+-------------
+The app reads `src/main/resources/application.yml`. Key Kafka properties (defaults) are:
+
+- `app.kafka.bootstrap-servers` — e.g., `localhost:9092`
+- `app.kafka.platform-topic` — `efg-platform-list`
+- `app.kafka.alert-topic` — `efg-all-alerts`
+
+You can override these with environment variables or command-line `--spring.config.additional-location` if needed.
+
+6) End-to-end: publish a platform-list message
+----------------------------------------------
+1) Ensure Kafka is running (docker compose or brew services) and app is started.
+2) POST to the producer endpoint:
+
+curl (example):
+
+```bash
+curl -s -X POST http://localhost:8080/api/efg/publish \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "publishDateTime":"2025-12-03T10:00:00Z",
+    "sourceSystem":"SYS",
+    "items": [
+      {"product":"P1","rules":["r1","r2"]},
+      {"product":"P1","rules":["r3"]},
+      {"product":"P2","rules":["r4"]}
+    ]
+  }'
+```
+
+3) Verify the message on the topic using kcat or Kafka console consumer:
+
+With kcat:
+
+```bash
+kcat -b localhost:9092 -t efg-platform-list -C -o beginning -q
+```
+
+Kafka console consumer (from Kafka distribution):
+
+```bash
+./bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic efg-platform-list --from-beginning --max-messages 1
+```
+
+Note: messages are Avro-reflect binary. To inspect with consumers you need a deserializer or the app's consumer logs; kcat will print binary unless using a schema-aware reader.
+
+7) End-to-end: publish an alert
+-------------------------------
+POST to alerts endpoint:
+
+```bash
+curl -s -X POST http://localhost:8080/api/efg/publish-alerts \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "publishDateTime":"2025-12-03T11:00:00Z",
+    "sourceSystem":"SYS",
+    "alertId":"ALERT-1",
+    "eventTime":"2025-12-03T11:00:00Z",
+    "alertType":"TYPE1",
+    "severity":"HIGH",
+    "message":"Something happened",
+    "details":{"key1":"val1"}
+  }'
+```
+
+Verify consumer logs or use a consumer configured with the Avro reflect deserializer.
+
+8) Tests
+--------
+Run unit and integration tests:
+
+```bash
+./gradlew clean test --no-daemon
+```
+
+There is an EmbeddedKafka integration test for the platform flow. If you add the alerts EmbeddedKafka test it will bring up embedded brokers during test.
+
+9) Troubleshooting
+------------------
+- If Gradle complains about Java version, ensure `JAVA_HOME` is set to a JDK 8 installation (see section 3).
+- If push to GitHub fails due to large files in history, ensure you're on the cleaned branch `feature/git-clean-clean`. Use `git status` and `git rev-parse --abbrev-ref HEAD` to confirm.
+- If Kafka messages look binary in CLI tools, that's because Avro-reflect uses binary serialization. Use the app's consumer logs or a matching Avro deserializer to decode messages.
+
+10) Development notes & next steps
+---------------------------------
+- The project currently uses Avro reflection. If you want Schema Registry support (Confluent) we can switch to the Confluent serializers and register schemas in the registry — notes are present earlier in this file.
+- I restored a deleted unit test and updated it to match the new `EfgService` constructor which now accepts both platform and alert Kafka templates and topics.
+- Recommended additions:
+  - Add an EmbeddedKafka test for alerts (I can add this). 
+  - Add a small README.md with these steps copied for quick onboarding.
+  - Remove accidental `src/.DS_Store` from the repo (`git rm --cached src/.DS_Store` and add to `.gitignore`).
+
+11) Common commands summary
+--------------------------
+- Build:
+
+```bash
+./gradlew clean build --no-daemon
+```
+
+- Run app (dev):
+
+```bash
+./gradlew bootRun --no-daemon
+```
+
+- Run tests:
+
+```bash
+./gradlew test --no-daemon
+```
+
+- Start Kafka (docker-compose):
+
+```bash
+docker compose up -d
+```
+
+- Check topic (kcat):
+
+```bash
+kcat -b localhost:9092 -t efg-platform-list -C -o beginning -q
+```
+
+12) Contact & follow-ups
+------------------------
+If you'd like I will:
+
+- Add the EmbeddedKafka alerts test and run it.
+- Remove `src/.DS_Store` and add `.DS_Store` to `.gitignore`.
+- Create a short `README.md` using these notes.
+
+End of notes.
