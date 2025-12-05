@@ -24,9 +24,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @EmbeddedKafka(partitions = 1, topics = { "efg-platform-list" })
 @TestPropertySource(properties = {
-        "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
-        "app.kafka.topic=efg-platform-list",
-        "app.kafka.reflect-class=com.pnc.efg.avro.schema.platformList.EfgPlatformList"
+    "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
+    "app.kafka.platform-topic=efg-platform-list",
+    "app.kafka.reflect-class=com.pnc.efg.avro.schema.platformList.EfgPlatformList"
 })
 public class EfgEmbeddedKafkaTest {
 

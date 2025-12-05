@@ -11,7 +11,7 @@ public class EfgConsumer {
 
     private final Logger log = LoggerFactory.getLogger(EfgConsumer.class);
 
-    @KafkaListener(topics = "${app.kafka.topic}", containerFactory = "kafkaListenerContainerFactory")
+    @KafkaListener(topics = "${app.kafka.platform-topic}", containerFactory = "kafkaListenerContainerFactory")
     public void listen(EfgPlatformList payload) {
         log.info("Received EfgPlatformList message: {}", payload);
     }
