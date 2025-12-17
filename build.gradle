@@ -10,9 +10,9 @@ sourceCompatibility = '1.8'
 
 repositories {
     mavenCentral()
-    // maven {
-    //     url 'https://packages.confluent.io/maven/'
-    // }
+    maven {
+        url 'https://packages.confluent.io/maven/'
+    }
 }
 
 // Helper tasks to run the small Avro utilities in src/main/java/com/pnc/efg/util
@@ -38,14 +38,22 @@ task runConsumerDump(type: JavaExec) {
     }
 }
 
+// Run the example Avro controller with Schema Registry
+task runAvroExample(type: JavaExec) {
+    group = 'examples'
+    description = 'Run the Kafka Avro producer example (com.example.kafka.Main)'
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'com.example.kafka.Main'
+}
+
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.kafka:spring-kafka'
     implementation 'org.apache.avro:avro:1.10.2'
 
-    // Optional: Confluent Avro serializer (if you plan to use Schema Registry directly)
-    // implementation 'io.confluent:kafka-avro-serializer:7.4.1'
+    // Confluent Avro serializer for Schema Registry integration
+    implementation 'io.confluent:kafka-avro-serializer:7.4.1'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.kafka:spring-kafka-test'

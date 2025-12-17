@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "ProductRulesEnvelope",
+  "namespace": "com.example.kafka.model",
+  "fields": [
+    {
+      "name": "products",
+      "type": {
+        "type": "array",
+        "items": "com.example.kafka.model.ProductRule"
+      }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "type": "record",
+  "name": "ProductRule",
+  "namespace": "com.example.kafka.model",
+  "fields": [
+    {"name": "product", "type": "string"},
+    {"name": "rules", "type": {"type": "array", "items": "string"}}
+  ]
+}
