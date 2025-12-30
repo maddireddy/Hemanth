@@ -1,0 +1,17 @@
+server:
+  port: 8080
+
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+
+app:
+  kafka:
+    platform-topic: efg-platform-list
+    alert-topic: efg-all-alerts
+    # The class used by the AvroReflectSerializer (the full class name)
+    reflect-class: com.pnc.efg.avro.schema.platformList.EfgPlatformList
+    # The reflect class for alerts
+    alert-reflect-class: com.pnc.efg.avro.schema.alerts.EfgAlert
+    # If you use Schema Registry with Confluent serializer, set Schema Registry URL here
+    schema-registry-url: http://localhost:8081

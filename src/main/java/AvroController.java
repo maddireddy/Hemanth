@@ -30,34 +30,36 @@ public class AvroController {
     /**
      * Reads input, segregates rules by product, builds one EfgPlatformList record, and publishes to Kafka.
      */
-    public void processAndPublish(List<Map<String, String>> inputList, String sourceSystem) {
-        // Group rules by product
-        Map<String, List<String>> productRules = inputList.stream()
-                .collect(Collectors.groupingBy(
-                        entry -> entry.get("product"),
-                        Collectors.mapping(entry -> entry.get("ruleName"), Collectors.toList())
-                ));
+    public String processAndPublish(List<ProductRule> inputList) {
+    // Group rules by product
+    Map<String, List<String>> productRules = inputList.stream()
+            .collect(Collectors.groupingBy(
+                    ProductRule::getProduct,
+                    Collectors.mapping(ProductRule::getRuleName, Collectors.toList())
+            ));
 
-        // Build ProductRule list
-        List<ProductRule> productRuleList = new ArrayList<>();
-        for (Map.Entry<String, List<String>> entry : productRules.entrySet()) {
-            ProductRule pr = ProductRule.newBuilder()
-                    .setProduct(entry.getKey())
-                    .setRules(entry.getValue())
-                    .build();
-            productRuleList.add(pr);
-        }
-
-        // Build EfgPlatformList record
-        EfgPlatformList efgRecord = EfgPlatformList.newBuilder()
-                .setPublishDateTime(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME))
-                .setSourceSystem(sourceSystem)
-                .setPlatformList(productRuleList)
+    // Build ProductRule list
+    List<ProductRule> productRuleList = new ArrayList<>();
+    for (Map.Entry<String, List<String>> entry : productRules.entrySet()) {
+        ProductRule pr = ProductRule.newBuilder()
+                .setProduct(entry.getKey())
+                .setRules(entry.getValue())
                 .build();
+        productRuleList.add(pr);
+    }
 
-        // Publish single message
-        producer.send(new ProducerRecord<>(topic, "platform-rules", efgRecord));
-        System.out.println("Published consolidated Avro record: " + efgRecord);
+    // Build EfgPlatformList record
+    EfgPlatformList efgRecord = EfgPlatformList.newBuilder()
+            .setPublishDateTime(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME))
+            .setSourceSystem("") // Removed sourceSystem parameter
+            .setPlatformList(productRuleList)
+            .build();
+
+    // Publish single message
+    producer.send(new ProducerRecord<>(topic, "platform-rules", efgRecord));
+    System.out.println("Published platform rules");
+
+    return efgRecord.toString();
     }
 
     public void close() {
